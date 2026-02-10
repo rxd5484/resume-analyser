@@ -1,6 +1,6 @@
 https://github.com/rxd5484/resume-analyser/blob/main/Create%20Next%20App%20-%2010%20February%202026%202.mp4
 
-Hello you can either download the mp4 video for demo or click on the link above thanks!!
+Hello you can download the mp4 video for demo (click the link above thanks!!)
 <img width="1318" height="889" alt="Screenshot 2026-02-10 at 7 29 33 AM" src="https://github.com/user-attachments/assets/d45907ff-7d32-4352-9eb3-b1d17cddcdb2" />
 
 
