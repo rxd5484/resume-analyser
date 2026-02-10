@@ -575,3 +575,11 @@ async def analyze_one_shot(
 ):
     up = await upload(resume)  # stores it, returns resume_id
     return await analyze(resume_id=up.resume_id, jd_text=jd_text)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", 8000))
+    )
