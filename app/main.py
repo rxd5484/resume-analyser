@@ -29,20 +29,24 @@ app = FastAPI(title="Resume ↔ JD Matcher (Evidence-Based Demo)")
 
 from fastapi.middleware.cors import CORSMiddleware
 
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*")
-if isinstance(ALLOWED_ORIGINS, list):
+def _parse_origins(raw):
+    # Accept: "*", comma-separated string, or python list (just in case)
+    if raw is None:
+        return ["*"]
+    if isinstance(raw, list):
+        origins = [str(o).strip() for o in raw if str(o).strip()]
+        return origins or ["*"]
+    s = str(raw).strip()
+    if s == "" or s == "*":
+        return ["*"]
+    return [o.strip() for o in s.split(",") if o.strip()]
 
-    origins = [o.strip() for o in ALLOWED_ORIGINS if str(o).strip()]
-
-else:
-
-    origins = [o.strip() for o in str(ALLOWED_ORIGINS).split(",") if o.strip()]
-
-
+raw = os.getenv("ALLOWED_ORIGINS", "*")
+origins = _parse_origins(raw)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in ALLOWED_ORIGINS],
+    allow_origins=origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
