@@ -92,7 +92,7 @@ export default function UploadPage() {
       fd.append("jd_text", jdText);
       fd.append("resume", resumeFile);
 
-      const res = await fetch(`${API_BASE.replace(/\/$/, "")}/analyze`, {
+      const res = await fetch(`${API_BASE.replace(/\/$/, "")}/analyze_one_shot`, {
         method: "POST",
         body: fd,
       });
