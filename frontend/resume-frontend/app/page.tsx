@@ -1,10 +1,11 @@
 "use client";
-console.log("API_BASE", process.env.NEXT_PUBLIC_API_BASE_URL);
+
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 
+// tiny clsx
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
@@ -18,14 +19,23 @@ function LabelMono({ children }: { children: React.ReactNode }) {
 }
 
 function Rule({ thick }: { thick?: boolean }) {
-  return <div className={cn("w-full border-t", thick ? "border-t-4 border-black" : "border-t border-black")} />;
+  return (
+    <div
+      className={cn(
+        "w-full border-t",
+        thick ? "border-t-4 border-black" : "border-t border-black"
+      )}
+    />
+  );
 }
 
 function Button({
   children,
   variant = "primary",
   ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "outline" }) {
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: "primary" | "outline";
+}) {
   const base =
     "inline-flex items-center justify-center px-8 py-4 text-sm font-medium uppercase tracking-widest border-2 transition-colors duration-100 focus-visible:outline focus-visible:outline-3 focus-visible:outline-black focus-visible:outline-offset-3 disabled:opacity-40 disabled:cursor-not-allowed";
   const styles =
@@ -53,28 +63,57 @@ function Card({
   return (
     <section className="border border-black p-6 md:p-8">
       <LabelMono>{kicker}</LabelMono>
-      <h2 className="mt-2 font-[var(--font-display)] text-2xl md:text-3xl tracking-tight">{title}</h2>
+      <h2 className="mt-2 font-[var(--font-display)] text-2xl md:text-3xl tracking-tight">
+        {title}
+      </h2>
       <div className="mt-6">{children}</div>
     </section>
   );
+}
+
+type Phase = "idle" | "uploading" | "analyzing";
+
+function formatErr(text: string) {
+  const t = (text || "").trim();
+  if (!t) return "Request failed.";
+  // try to pull FastAPI {"detail": "..."} out of plain text
+  try {
+    const j = JSON.parse(t);
+    if (j?.detail) return typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);
+  } catch {}
+  // otherwise keep it short
+  return t.length > 400 ? t.slice(0, 400) + "…" : t;
 }
 
 export default function UploadPage() {
   const router = useRouter();
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [jdText, setJdText] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
 
+  const base = useMemo(() => API_BASE.replace(/\/$/, ""), []);
+
   const canSubmit = useMemo(() => {
-    return !!resumeFile && jdText.trim().length >= 80 && !!API_BASE;
-  }, [resumeFile, jdText]);
+    return (
+      !!resumeFile &&
+      jdText.trim().length >= 80 &&
+      !!API_BASE &&
+      phase === "idle"
+    );
+  }, [resumeFile, jdText, phase]);
 
   async function onAnalyze() {
     setError(null);
 
+    // Helpful log to verify env is loaded on Vercel
+    // eslint-disable-next-line no-console
+    console.log("API_BASE", process.env.NEXT_PUBLIC_API_BASE_URL);
+
     if (!API_BASE) {
-      setError("Missing NEXT_PUBLIC_API_BASE_URL in resume-frontend/.env.local");
+      setError(
+        "Missing NEXT_PUBLIC_API_BASE_URL. Add it in Vercel → Project → Settings → Environment Variables."
+      );
       return;
     }
     if (!resumeFile) {
@@ -86,21 +125,38 @@ export default function UploadPage() {
       return;
     }
 
-    setLoading(true);
     try {
-      const fd = new FormData();
-      fd.append("jd_text", jdText);
-      fd.append("resume", resumeFile);
+      // 1) Upload resume -> get resume_id
+      setPhase("uploading");
+      const up = new FormData();
+      up.append("resume", resumeFile);
 
-      const res = await fetch(`${API_BASE.replace(/\/$/, "")}/analyze_one_shot`, {
+      const upRes = await fetch(`${base}/upload`, {
+        method: "POST",
+        body: up,
+      });
+
+      if (!upRes.ok) throw new Error(formatErr(await upRes.text()));
+
+      const upJson = await upRes.json();
+      const resume_id: string | undefined = upJson?.resume_id;
+
+      if (!resume_id) {
+        throw new Error("Upload succeeded but resume_id missing in response.");
+      }
+
+      // 2) Analyze using resume_id + jd_text
+      setPhase("analyzing");
+      const fd = new FormData();
+      fd.append("resume_id", resume_id); // MUST match backend Form(...)
+      fd.append("jd_text", jdText); // MUST match backend Form(...)
+
+      const res = await fetch(`${base}/analyze`, {
         method: "POST",
         body: fd,
       });
 
-      if (!res.ok) {
-        const t = await res.text();
-        throw new Error(t || `Request failed: ${res.status}`);
-      }
+      if (!res.ok) throw new Error(formatErr(await res.text()));
 
       const json = await res.json();
 
@@ -113,9 +169,12 @@ export default function UploadPage() {
     } catch (e: any) {
       setError(e?.message || "Something broke.");
     } finally {
-      setLoading(false);
+      setPhase("idle");
     }
   }
+
+  const buttonLabel =
+    phase === "uploading" ? "Uploading" : phase === "analyzing" ? "Analyzing" : "Analyze";
 
   return (
     <div className="mm-texture min-h-screen">
@@ -123,7 +182,6 @@ export default function UploadPage() {
         <header className="pb-10 md:pb-14">
           <LabelMono>Evidence-based matching</LabelMono>
           <h1 className="mt-3 font-[var(--font-display)] tracking-tighter leading-none text-5xl md:text-7xl lg:text-8xl">
-            
             THE <span className="italic">MATCH</span>
           </h1>
           <p className="mt-6 max-w-2xl text-lg md:text-xl leading-relaxed text-[var(--muted-foreground)]">
@@ -185,8 +243,8 @@ export default function UploadPage() {
                   {jdText.trim().length} chars
                 </div>
 
-                <Button onClick={onAnalyze} disabled={!canSubmit || loading}>
-                  {loading ? "Analyzing" : "Analyze"}
+                <Button onClick={onAnalyze} disabled={!canSubmit}>
+                  {buttonLabel}
                 </Button>
               </div>
 
@@ -194,8 +252,12 @@ export default function UploadPage() {
                 <div className="border border-black p-4 text-sm">
                   <LabelMono>Config</LabelMono>
                   <div className="mt-2 text-[var(--muted-foreground)]">
-                    Add <code className="font-[var(--font-mono)]">NEXT_PUBLIC_API_BASE_URL</code> to{" "}
-                    <code className="font-[var(--font-mono)]">resume-frontend/.env.local</code>
+                    Add{" "}
+                    <code className="font-[var(--font-mono)]">NEXT_PUBLIC_API_BASE_URL</code>{" "}
+                    in Vercel → <span className="font-[var(--font-mono)]">Settings → Environment Variables</span>
+                    <div className="mt-2 font-[var(--font-mono)] text-xs">
+                      Example: https://resume-analyser-production.up.railway.app
+                    </div>
                   </div>
                 </div>
               ) : null}
@@ -206,7 +268,9 @@ export default function UploadPage() {
         {error ? (
           <div className="mt-8 border-4 border-black p-6 bg-black text-white">
             <LabelMono>Error</LabelMono>
-            <div className="mt-3 font-[var(--font-display)] text-2xl md:text-3xl tracking-tight">{error}</div>
+            <div className="mt-3 font-[var(--font-display)] text-2xl md:text-3xl tracking-tight">
+              {error}
+            </div>
           </div>
         ) : null}
 
