@@ -26,6 +26,20 @@ EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
 
 app = FastAPI(title="Resume ↔ JD Matcher (Evidence-Based Demo)")
 
+
+from fastapi.middleware.cors import CORSMiddleware
+
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in ALLOWED_ORIGINS],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 # Demo in-memory storage (multi-user-ish)
 # NOTE: This clears when the server restarts (fine for demo)
 RESUMES: Dict[str, Dict[str, Any]] = {}
