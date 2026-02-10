@@ -27,26 +27,18 @@ EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
 app = FastAPI(title="Resume ↔ JD Matcher (Evidence-Based Demo)")
 
 
+
+
 from fastapi.middleware.cors import CORSMiddleware
+import os
 
-def _parse_origins(raw):
-    # Accept: "*", comma-separated string, or python list (just in case)
-    if raw is None:
-        return ["*"]
-    if isinstance(raw, list):
-        origins = [str(o).strip() for o in raw if str(o).strip()]
-        return origins or ["*"]
-    s = str(raw).strip()
-    if s == "" or s == "*":
-        return ["*"]
-    return [o.strip() for o in s.split(",") if o.strip()]
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*")
 
-raw = os.getenv("ALLOWED_ORIGINS", "*")
-origins = _parse_origins(raw)
+origins = [o.strip() for o in ALLOWED_ORIGINS.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"] if origins == ["*"] else origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
